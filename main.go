@@ -53,7 +53,7 @@ func main() {
 	}
 	var testFolder = Folder{Name: "TestFolder", ParentID: 1, Children: []Folder{}, Objects: []Object{}}
 	var testFolder2 = Folder{Name: "TestFolder2", ParentID: 2, Children: []Folder{}, Objects: []Object{}}
-	var testFolder3 = Folder{Name: "TestFolder3", ParentID: 3, Children: []Folder{}, Objects: []Object{}}
+	var testFolder3 = Folder{Name: "TestFolder3", ParentID: 2, Children: []Folder{}, Objects: []Object{}}
 	var testJsonObj2 = Object{Name: "Test2JSOPN", Type: "MD", Data: "#asd #asdasdasd #asd", FolderID: 3}
 	var testJsonObj3 = Object{Name: "Test3JSOPN", Type: "MD", Data: "#asd #asdasdasd #asd", FolderID: 3}
 
@@ -64,8 +64,6 @@ func main() {
 	db.Create(&testFolder2)
 	db.Create(&testJsonObj2)
 	db.Create(&testJsonObj3)
-
-
 
 	r := gin.Default()
 	r.Use(cors.Default())
@@ -92,6 +90,9 @@ func main() {
 	r.PUT("/object/:id", func(c *gin.Context) {
 		updateObject(c, db)
 	})
+	r.PUT("/object/:id/data", func(c *gin.Context) {
+		updateObjectData(c, db)
+	})
 	r.DELETE("/object/:id", func(c *gin.Context) {
 		deleteObject(c, db)
 	})
@@ -102,7 +103,6 @@ func main() {
 	r.Run(":8080")
 
 }
-
 
 func createFolder(c *gin.Context, db *gorm.DB) {
 	var folder Folder
@@ -245,6 +245,36 @@ func updateObject(c *gin.Context, db *gorm.DB) {
 	}
 
 	c.JSON(http.StatusOK, jsonObj)
+}
+
+func updateObjectData(c *gin.Context, db *gorm.DB) {
+	var object Object
+	id := c.Param("id")
+
+	result := db.First(&object, id)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Object not found"})
+		return
+	}
+
+	var updatedData struct {
+		Data string `json:"data"`
+	}
+
+	if err := c.ShouldBindJSON(&updatedData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	object.Data = updatedData.Data
+
+	result = db.Save(&object)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, object)
 }
 
 func deleteObject(c *gin.Context, db *gorm.DB) {
