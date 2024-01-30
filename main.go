@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -56,6 +55,7 @@ func main() {
 	var testFolder2 = Folder{Name: "TestFolder2", ParentID: 2, Children: []Folder{}, Objects: []Object{}}
 	var testFolder3 = Folder{Name: "TestFolder3", ParentID: 3, Children: []Folder{}, Objects: []Object{}}
 	var testJsonObj2 = Object{Name: "Test2JSOPN", Type: "MD", Data: "#asd #asdasdasd #asd", FolderID: 3}
+	var testJsonObj3 = Object{Name: "Test3JSOPN", Type: "MD", Data: "#asd #asdasdasd #asd", FolderID: 3}
 
 	db.Create(&zeroFolder)
 	db.Create(&testJsonObj)
@@ -63,38 +63,9 @@ func main() {
 	db.Create(&testFolder3)
 	db.Create(&testFolder2)
 	db.Create(&testJsonObj2)
+	db.Create(&testJsonObj3)
 
 
-	// result := db.Raw(`
-	// 	WITH RECURSIVE rectree AS (
-	// 		SELECT *
-	// 		FROM folders
-	// 		WHERE id = 1
-	// 		UNION ALL
-	// 		SELECT f.*
-	// 		FROM folders f
-	// 		JOIN rectree
-	// 		ON f.parent_id = rectree.id
-	// 	) SELECT * FROM rectree;
-	// `).Scan(&folders)
-	var result []map[string]interface{}
-
-	tx := db.Raw(`
-	WITH RECURSIVE T1(id,name,parent_id) AS (
-		SELECT * FROM folders T0 WHERE
-		T0.parent_id IS 1
-		UNION ALL
-		SELECT T2. id, T2.name, T2.parent_id FROM folders T2, T1
-		WHERE T2.parent_id = T1.id
-		)
-		SELECT * FROM T1;
-`).Scan(&result)
-	if tx.Error != nil {
-		fmt.Println(tx.Error)
-		return
-	}
-	bytes, _ := json.Marshal(result)
-	fmt.Println(string(bytes))
 
 	r := gin.Default()
 	r.Use(cors.Default())
@@ -112,25 +83,26 @@ func main() {
 		deleteFolder(c, db)
 	})
 
-	r.POST("/jsonobj", func(c *gin.Context) {
-		createJSONObj(c, db)
+	r.POST("/object", func(c *gin.Context) {
+		createObject(c, db)
 	})
-	r.GET("/jsonobj/:id", func(c *gin.Context) {
-		getJSONObj(c, db)
+	r.GET("/object/:id", func(c *gin.Context) {
+		getObject(c, db)
 	})
-	r.PUT("/jsonobj/:id", func(c *gin.Context) {
-		updateJSONObj(c, db)
+	r.PUT("/object/:id", func(c *gin.Context) {
+		updateObject(c, db)
 	})
-	r.DELETE("/jsonobj/:id", func(c *gin.Context) {
-		deleteJSONObj(c, db)
+	r.DELETE("/object/:id", func(c *gin.Context) {
+		deleteObject(c, db)
 	})
 	r.GET("/structure", func(c *gin.Context) {
-		getFolders(c, db)
+		getStructure(c, db)
 	})
 
 	r.Run(":8080")
 
 }
+
 
 func createFolder(c *gin.Context, db *gorm.DB) {
 	var folder Folder
@@ -222,7 +194,7 @@ func deleteSubfolders(db *gorm.DB, parentID uint) {
 	}
 }
 
-func createJSONObj(c *gin.Context, db *gorm.DB) {
+func createObject(c *gin.Context, db *gorm.DB) {
 	var jsonObj Object
 	if err := c.ShouldBindJSON(&jsonObj); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -238,7 +210,7 @@ func createJSONObj(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, jsonObj)
 }
 
-func getJSONObj(c *gin.Context, db *gorm.DB) {
+func getObject(c *gin.Context, db *gorm.DB) {
 	var jsonObj Object
 	id := c.Param("id")
 
@@ -251,7 +223,7 @@ func getJSONObj(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, jsonObj)
 }
 
-func updateJSONObj(c *gin.Context, db *gorm.DB) {
+func updateObject(c *gin.Context, db *gorm.DB) {
 	var jsonObj Object
 	id := c.Param("id")
 
@@ -275,7 +247,7 @@ func updateJSONObj(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, jsonObj)
 }
 
-func deleteJSONObj(c *gin.Context, db *gorm.DB) {
+func deleteObject(c *gin.Context, db *gorm.DB) {
 	var jsonObj Object
 	id := c.Param("id")
 
@@ -294,15 +266,23 @@ func deleteJSONObj(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, gin.H{"message": "JSON object deleted"})
 }
 
-func getFolders(c *gin.Context, db *gorm.DB) {
+func getStructure(c *gin.Context, db *gorm.DB) {
 	var folders []Folder
 
-	result := db.Joins("Children").Joins("Objects").Find(&folders)
+	// Retrieve all folders from the database
+	result := db.Preload("Objects").Find(&folders)
+
 	if result.Error != nil {
-		panic(result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
 	}
 
-	fmt.Println(folders)
+	// Filter out the "Data" column from all objects
+	for i := range folders {
+		for j := range folders[i].Objects {
+			folders[i].Objects[j].Data = ""
+		}
+	}
 
-	c.JSON(http.StatusOK, []Folder{})
+	c.JSON(http.StatusOK, folders)
 }
