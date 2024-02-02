@@ -90,8 +90,8 @@ func main() {
 	r.PUT("/object/:id", func(c *gin.Context) {
 		updateObject(c, db)
 	})
-	r.PUT("/object/:id/data", func(c *gin.Context) {
-		updateObjectData(c, db)
+	r.PUT("/object/:id/name", func(c *gin.Context) {
+		updateObjectName(c, db)
 	})
 	r.DELETE("/object/:id", func(c *gin.Context) {
 		deleteObject(c, db)
@@ -232,11 +232,13 @@ func updateObject(c *gin.Context, db *gorm.DB) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "JSON object not found"})
 		return
 	}
+	fmt.Println(result)
 
 	if err := c.ShouldBindJSON(&jsonObj); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	fmt.Println(jsonObj)
 
 	result = db.Save(&jsonObj)
 	if result.Error != nil {
@@ -247,7 +249,7 @@ func updateObject(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, jsonObj)
 }
 
-func updateObjectData(c *gin.Context, db *gorm.DB) {
+func updateObjectName(c *gin.Context, db *gorm.DB) {
 	var object Object
 	id := c.Param("id")
 
@@ -258,15 +260,15 @@ func updateObjectData(c *gin.Context, db *gorm.DB) {
 	}
 
 	var updatedData struct {
-		Data string `json:"data"`
+		Name string `json:"name"`
 	}
 
 	if err := c.ShouldBindJSON(&updatedData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	object.Data = updatedData.Data
+	fmt.Println(updatedData.Name)
+	object.Name = updatedData.Name
 
 	result = db.Save(&object)
 	if result.Error != nil {
