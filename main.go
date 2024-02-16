@@ -70,18 +70,40 @@ func main() {
 	db.Create(&testJsonObj2)
 	db.Create(&testJsonObj3)
 
+	// Create a new folder
 	http.Handle("POST /folder/", enableCORS(http.HandlerFunc(createFolder)))
+
+	// Get a folder by ID
 	http.Handle("GET /posts/{id}", enableCORS(http.HandlerFunc(getFolder)))
+
+	// Update a folder by ID
 	http.Handle("PUT /folder/{id}/", enableCORS(http.HandlerFunc(updateFolder)))
+
+	// Delete a folder by ID
 	http.Handle("DELETE /folder/{id}/", enableCORS(http.HandlerFunc(deleteFolder)))
+
+	// Create a new JSON object
 	http.Handle("POST /object/", enableCORS(http.HandlerFunc(createObject)))
+
+	// Get a JSON object by ID
 	http.Handle("GET /object/{id}", enableCORS(http.HandlerFunc(getObject)))
+
+	// Update a JSON object by ID
 	http.Handle("PUT /object/{id}/", enableCORS(http.HandlerFunc(updateObject)))
+
+	// Update a JSON object's name by ID
 	http.Handle("PUT /object/{id}/name/", enableCORS(http.HandlerFunc(updateObjectName)))
+
+	// Delete a JSON object by ID
 	http.Handle("DELETE /object/{id}/", enableCORS(http.HandlerFunc(deleteObject)))
+
+	// Get the folder structure
 	http.Handle("GET /structure", enableCORS(http.HandlerFunc(getStructure)))
+
+	// File upload
 	http.Handle("POST /upload/", enableCORS(http.HandlerFunc(handleFileUpload)))
 
+	// Start the server
 	http.ListenAndServe(":8080", nil)
 }
 
