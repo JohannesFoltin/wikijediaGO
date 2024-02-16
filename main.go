@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -26,8 +28,11 @@ type Object struct {
 	FolderID uint `gorm:"not null"`
 }
 
+var db *gorm.DB
+
 func main() {
-	db, err := gorm.Open(sqlite.Open("./Data/gorm.db"), &gorm.Config{})
+	var err error
+	db, err = gorm.Open(sqlite.Open("./Data/gorm.db"), &gorm.Config{})
 	if err != nil {
 		panic("failed to connect to database")
 	}
@@ -65,110 +70,149 @@ func main() {
 	db.Create(&testJsonObj2)
 	db.Create(&testJsonObj3)
 
-	r := gin.Default()
-	r.Use(cors.Default())
+	http.Handle("POST /folder", enableCORS(http.HandlerFunc(createFolder)))
+	http.Handle("GET /posts/{id}", enableCORS(http.HandlerFunc(getFolder)))
+	http.Handle("PUT /folder/{id}", enableCORS(http.HandlerFunc(updateFolder)))
+	http.Handle("DELETE /folder/{id}", enableCORS(http.HandlerFunc(deleteFolder)))
+	http.Handle("POST /object", enableCORS(http.HandlerFunc(createObject)))
+	http.Handle("GET /object/{id}", enableCORS(http.HandlerFunc(getObject)))
+	http.Handle("PUT /object/{id}", enableCORS(http.HandlerFunc(updateObject)))
+	http.Handle("PUT /object/{id}/name", enableCORS(http.HandlerFunc(updateObjectName)))
+	http.Handle("DELETE /object/{id}", enableCORS(http.HandlerFunc(deleteObject)))
+	http.Handle("GET /structure", enableCORS(http.HandlerFunc(getStructure)))
+	http.Handle("POST /upload", enableCORS(http.HandlerFunc(handleFileUpload)))
 
-	r.POST("/folder", func(c *gin.Context) {
-		createFolder(c, db)
-	})
-	r.GET("/folder/:id", func(c *gin.Context) {
-		getFolder(c, db)
-	})
-	r.PUT("/folder/:id", func(c *gin.Context) {
-		updateFolder(c, db)
-	})
-	r.DELETE("/folder/:id", func(c *gin.Context) {
-		deleteFolder(c, db)
-	})
-
-	r.POST("/object", func(c *gin.Context) {
-		createObject(c, db)
-	})
-	r.GET("/object/:id", func(c *gin.Context) {
-		getObject(c, db)
-	})
-	r.PUT("/object/:id", func(c *gin.Context) {
-		updateObject(c, db)
-	})
-	r.PUT("/object/:id/name", func(c *gin.Context) {
-		updateObjectName(c, db)
-	})
-	r.DELETE("/object/:id", func(c *gin.Context) {
-		deleteObject(c, db)
-	})
-	r.GET("/structure", func(c *gin.Context) {
-		getStructure(c, db)
-	})
-
-	r.Run(":8080")
-
+	http.ListenAndServe(":8080", nil)
 }
 
-func createFolder(c *gin.Context, db *gorm.DB) {
+func enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func handleFileUpload(w http.ResponseWriter, r *http.Request) {
+	file, fileHeader, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Check file type
+	fileType := fileHeader.Header.Get("Content-Type")
+	fmt.Println(fileType)
+	if fileType != "image/png" && fileType != "image/jpeg" && fileType != "application/pdf" {
+		http.Error(w, "Invalid file type", http.StatusBadRequest)
+		return
+	}
+
+	// Save file to disk
+	filePath := "uploads/" + fileHeader.Filename
+	outFile, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer outFile.Close()
+
+	_, err = io.Copy(outFile, file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tmpObject := Object{Name: fileHeader.Filename, Type: fileType, Data: filePath, FolderID: 1}
+
+	result := db.Create(&tmpObject)
+	if result.Error != nil {
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "File uploaded successfully")
+}
+
+func createFolder(w http.ResponseWriter, r *http.Request) {
 	var folder Folder
-	if err := c.ShouldBindJSON(&folder); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	err := json.NewDecoder(r.Body).Decode(&folder)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	result := db.Create(&folder)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, folder)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(folder)
 }
 
-func getFolder(c *gin.Context, db *gorm.DB) {
+func getFolder(w http.ResponseWriter, r *http.Request) {
 	var folder Folder
-	id := c.Param("id")
+	id := r.PathValue("id")
 
 	result := db.First(&folder, id)
 	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Folder not found"})
+		http.Error(w, "Folder not found", http.StatusNotFound)
 		return
 	}
 
-	c.JSON(http.StatusOK, folder)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(folder)
 }
 
-func updateFolder(c *gin.Context, db *gorm.DB) {
+func updateFolder(w http.ResponseWriter, r *http.Request) {
 	var folder Folder
-	id := c.Param("id")
+	id := r.PathValue("id")
 
 	result := db.First(&folder, id)
 	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Folder not found"})
+		http.Error(w, "Folder not found", http.StatusNotFound)
 		return
 	}
 
-	if err := c.ShouldBindJSON(&folder); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	err := json.NewDecoder(r.Body).Decode(&folder)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	result = db.Save(&folder)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, folder)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(folder)
 }
 
-func deleteFolder(c *gin.Context, db *gorm.DB) {
+func deleteFolder(w http.ResponseWriter, r *http.Request) {
 	var folder Folder
-	id := c.Param("id")
+	id := r.PathValue("id")
 
 	result := db.First(&folder, id)
 	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Folder not found"})
+		http.Error(w, "Folder not found", http.StatusNotFound)
 		return
 	}
 
 	// Delete subfolders recursively
-	deleteSubfolders(db, folder.ID)
+	deleteSubfolders(folder.ID)
 
 	// Delete JSON objects in the folder
 	db.Where("folder_id = ?", folder.ID).Delete(&Object{})
@@ -176,86 +220,110 @@ func deleteFolder(c *gin.Context, db *gorm.DB) {
 	// Delete the folder itself
 	result = db.Delete(&folder)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Folder and its contents deleted"})
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "Folder and its contents deleted")
 }
 
-func deleteSubfolders(db *gorm.DB, parentID uint) {
+func deleteSubfolders(parentID uint) {
 	var subfolders []Folder
 	db.Where("parent_id = ?", parentID).Find(&subfolders)
 
 	for _, subfolder := range subfolders {
-		deleteSubfolders(db, subfolder.ID)
+		deleteSubfolders(subfolder.ID)
 		db.Where("folder_id = ?", subfolder.ID).Delete(&Object{})
 		db.Delete(&subfolder)
 	}
 }
 
-func createObject(c *gin.Context, db *gorm.DB) {
+func createObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
-	if err := c.ShouldBindJSON(&jsonObj); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	err := json.NewDecoder(r.Body).Decode(&jsonObj)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	result := db.Create(&jsonObj)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, jsonObj)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(jsonObj)
 }
 
-func getObject(c *gin.Context, db *gorm.DB) {
+func getObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
-	id := c.Param("id")
+	id := r.PathValue("id")
 
 	result := db.First(&jsonObj, id)
 	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "JSON object not found"})
+		http.Error(w, "JSON object not found", http.StatusNotFound)
 		return
 	}
 
-	c.JSON(http.StatusOK, jsonObj)
+	// Check the object type
+	switch jsonObj.Type {
+	case "MD":
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(jsonObj)
+		return
+	case "image/png":
+		filePath := filepath.FromSlash(jsonObj.Data)
+		http.ServeFile(w, r, filePath)
+	case "jpeg":
+		// Handle JPEG object
+		// ...
+	case "pdf":
+		// Handle PDF object
+		// ...
+	default:
+		http.Error(w, "Unsupported object type", http.StatusBadRequest)
+		return
+	}
+
+	// Object handling logic
+	// ...
 }
 
-func updateObject(c *gin.Context, db *gorm.DB) {
+func updateObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
-	id := c.Param("id")
+	id := r.PathValue("id")
 
 	result := db.First(&jsonObj, id)
 	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "JSON object not found"})
+		http.Error(w, "JSON object not found", http.StatusNotFound)
 		return
 	}
-	fmt.Println(result)
 
-	if err := c.ShouldBindJSON(&jsonObj); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	err := json.NewDecoder(r.Body).Decode(&jsonObj)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Println(jsonObj)
 
 	result = db.Save(&jsonObj)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, jsonObj)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(jsonObj)
 }
 
-func updateObjectName(c *gin.Context, db *gorm.DB) {
+func updateObjectName(w http.ResponseWriter, r *http.Request) {
 	var object Object
-	id := c.Param("id")
+	id := r.PathValue("id")
 
 	result := db.First(&object, id)
 	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Object not found"})
+		http.Error(w, "Object not found", http.StatusNotFound)
 		return
 	}
 
@@ -263,8 +331,9 @@ func updateObjectName(c *gin.Context, db *gorm.DB) {
 		Name string `json:"name"`
 	}
 
-	if err := c.ShouldBindJSON(&updatedData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	err := json.NewDecoder(r.Body).Decode(&updatedData)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	fmt.Println(updatedData.Name)
@@ -272,40 +341,42 @@ func updateObjectName(c *gin.Context, db *gorm.DB) {
 
 	result = db.Save(&object)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, object)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(object)
 }
 
-func deleteObject(c *gin.Context, db *gorm.DB) {
+func deleteObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
-	id := c.Param("id")
+	id := r.PathValue("id")
 
 	result := db.First(&jsonObj, id)
 	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "JSON object not found"})
+		http.Error(w, "JSON object not found", http.StatusNotFound)
 		return
 	}
 
 	result = db.Delete(&jsonObj)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "JSON object deleted"})
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "JSON object deleted")
 }
 
-func getStructure(c *gin.Context, db *gorm.DB) {
+func getStructure(w http.ResponseWriter, r *http.Request) {
 	var folders []Folder
 
 	// Retrieve all folders from the database
 	result := db.Preload("Objects").Find(&folders)
 
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -316,5 +387,6 @@ func getStructure(c *gin.Context, db *gorm.DB) {
 		}
 	}
 
-	c.JSON(http.StatusOK, folders)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(folders)
 }
