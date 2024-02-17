@@ -71,40 +71,51 @@ func main() {
 	db.Create(&testJsonObj3)
 
 	// Create a new folder
-	http.Handle("POST /folder/", enableCORS(http.HandlerFunc(createFolder)))
+	http.Handle("POST /folder", enableCORS(http.HandlerFunc(createFolder)))
+	http.Handle("OPTIONS /folder", http.HandlerFunc(handleCorsRequest))
 
 	// Get a folder by ID
 	http.Handle("GET /posts/{id}", enableCORS(http.HandlerFunc(getFolder)))
 
 	// Update a folder by ID
-	http.Handle("PUT /folder/{id}/", enableCORS(http.HandlerFunc(updateFolder)))
+	http.Handle("PUT /folder/{id}", enableCORS(http.HandlerFunc(updateFolder)))
+	http.Handle("OPTIONS /folder/{id}", http.HandlerFunc(handleCorsRequest))
 
 	// Delete a folder by ID
-	http.Handle("DELETE /folder/{id}/", enableCORS(http.HandlerFunc(deleteFolder)))
+	http.Handle("DELETE /folder/{id}", enableCORS(http.HandlerFunc(deleteFolder)))
 
 	// Create a new JSON object
-	http.Handle("POST /object/", enableCORS(http.HandlerFunc(createObject)))
+	http.Handle("POST /object", enableCORS(http.HandlerFunc(createObject)))
+	http.Handle("OPTIONS /object", http.HandlerFunc(handleCorsRequest))
 
 	// Get a JSON object by ID
 	http.Handle("GET /object/{id}", enableCORS(http.HandlerFunc(getObject)))
 
 	// Update a JSON object by ID
-	http.Handle("PUT /object/{id}/", enableCORS(http.HandlerFunc(updateObject)))
+	http.Handle("PUT /object/{id}", enableCORS(http.HandlerFunc(updateObject)))
+	http.Handle("OPTIONS /object/{id}", http.HandlerFunc(handleCorsRequest))
 
 	// Update a JSON object's name by ID
-	http.Handle("PUT /object/{id}/name/", enableCORS(http.HandlerFunc(updateObjectName)))
+	http.Handle("PUT /object/{id}/name", enableCORS(http.HandlerFunc(updateObjectName)))
+	http.Handle("OPTIONS /object/{id}/name", http.HandlerFunc(handleCorsRequest))
 
 	// Delete a JSON object by ID
-	http.Handle("DELETE /object/{id}/", enableCORS(http.HandlerFunc(deleteObject)))
+	http.Handle("DELETE /object/{id}", enableCORS(http.HandlerFunc(deleteObject)))
 
 	// Get the folder structure
 	http.Handle("GET /structure", enableCORS(http.HandlerFunc(getStructure)))
 
 	// File upload
-	http.Handle("POST /upload/", enableCORS(http.HandlerFunc(handleFileUpload)))
+	http.Handle("POST /upload", enableCORS(http.HandlerFunc(handleFileUpload)))
+	http.Handle("OPTIONS /upload", http.HandlerFunc(handleCorsRequest))
 
 	// Start the server
-	http.ListenAndServe(":8080", nil)
+	errh := http.ListenAndServe(":8080", nil)
+	if errh != nil {
+		fmt.Println("http Server error")
+		return
+	}
+
 }
 
 func enableCORS(next http.Handler) http.Handler {
@@ -120,6 +131,13 @@ func enableCORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func handleCorsRequest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.WriteHeader(http.StatusOK)
 }
 
 func handleFileUpload(w http.ResponseWriter, r *http.Request) {
@@ -166,6 +184,8 @@ func handleFileUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func createFolder(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Anfrage lol")
+
 	var folder Folder
 	err := json.NewDecoder(r.Body).Decode(&folder)
 	if err != nil {
