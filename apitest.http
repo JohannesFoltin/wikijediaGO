@@ -5,6 +5,8 @@ DELETE http://localhost:8080/folder/3
 ###
 DELETE http://localhost:8080/folder/2
 ###
-DELETE http://localhost:8080/object/5
+DELETE http://localhost:8080/object/4
 ###
 GET http://localhost:8080/folder/1
+###
+GET http://localhost:8080/object/data/4

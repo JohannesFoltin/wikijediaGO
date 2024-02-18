@@ -3,13 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 type Folder struct {
@@ -90,6 +89,7 @@ func main() {
 
 	// Get a JSON object by ID
 	http.Handle("GET /object/{id}", enableCORS(http.HandlerFunc(getObject)))
+	http.Handle("GET /object/data/{id}", enableCORS(http.HandlerFunc(getFileFromObject)))
 
 	// Update a JSON object by ID
 	http.Handle("PUT /object/{id}", enableCORS(http.HandlerFunc(updateObject)))
@@ -154,6 +154,7 @@ func handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	_, _ = file.Seek(0, 0)
 
 	contentType := http.DetectContentType(buf)
 
@@ -188,7 +189,7 @@ func handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Println(w, "File uploaded successfully")
+	fmt.Fprint(w, "File uploaded successfully")
 }
 
 func createFolder(w http.ResponseWriter, r *http.Request) {
@@ -301,19 +302,32 @@ func getObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if jsonObj.Type == "MD" {
-		w.Header().Set("Content-Type", "application/json")
-		err := json.NewEncoder(w).Encode(jsonObj)
-		if err != nil {
-			http.Error(w, result.Error.Error(), http.StatusBadRequest)
-			return
-		}
-
+	w.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(w).Encode(jsonObj)
+	if err != nil {
+		http.Error(w, result.Error.Error(), http.StatusBadRequest)
 		return
-	} else {
-		filePath := filepath.FromSlash(jsonObj.Data)
-		http.ServeFile(w, r, filePath)
 	}
+
+}
+
+func getFileFromObject(w http.ResponseWriter, r *http.Request) {
+	var jsonObj Object
+	id := r.PathValue("id")
+
+	result := db.First(&jsonObj, id)
+	if result.Error != nil {
+		http.Error(w, "JSON object not found", http.StatusNotFound)
+		return
+	}
+
+	if jsonObj.Type == "MD" {
+		http.Error(w, "You can only get a File from an File lol. U looser", http.StatusBadRequest)
+		return
+	}
+
+	filePath := filepath.FromSlash(jsonObj.Data)
+	http.ServeFile(w, r, filePath)
 
 }
 
