@@ -75,7 +75,7 @@ func main() {
 	http.Handle("OPTIONS /folder", http.HandlerFunc(handleCorsRequest))
 
 	// Get a folder by ID
-	http.Handle("GET /posts/{id}", enableCORS(http.HandlerFunc(getFolder)))
+	http.Handle("GET /folder/{id}", enableCORS(http.HandlerFunc(getFolder)))
 
 	// Update a folder by ID
 	http.Handle("PUT /folder/{id}", enableCORS(http.HandlerFunc(updateFolder)))
@@ -215,12 +215,7 @@ func getFolder(w http.ResponseWriter, r *http.Request) {
 
 	var folder Folder
 	id := r.PathValue("id")
-
-	err := json.NewDecoder(r.Body).Decode(&folder)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+	fmt.Println(id)
 
 	result := db.First(&folder, id)
 	if result.Error != nil {
@@ -306,28 +301,20 @@ func getObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check the object type
-	switch jsonObj.Type {
-	case "MD":
+	if jsonObj.Type == "MD" {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(jsonObj)
+		err := json.NewEncoder(w).Encode(jsonObj)
+		if err != nil {
+			http.Error(w, result.Error.Error(), http.StatusBadRequest)
+			return
+		}
+
 		return
-	case "image/png":
+	} else {
 		filePath := filepath.FromSlash(jsonObj.Data)
 		http.ServeFile(w, r, filePath)
-	case "jpeg":
-		// Handle JPEG object
-		// ...
-	case "pdf":
-		// Handle PDF object
-		// ...
-	default:
-		http.Error(w, "Unsupported object type", http.StatusBadRequest)
-		return
 	}
 
-	// Object handling logic
-	// ...
 }
 
 func updateObject(w http.ResponseWriter, r *http.Request) {

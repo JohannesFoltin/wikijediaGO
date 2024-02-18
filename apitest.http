@@ -1,0 +1,10 @@
+GET http://localhost:8080/structure
+
+###
+DELETE http://localhost:8080/folder/3
+###
+DELETE http://localhost:8080/folder/2
+###
+DELETE http://localhost:8080/object/5
+###
+GET http://localhost:8080/folder/1
