@@ -148,10 +148,18 @@ func handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Check file type
-	fileType := fileHeader.Header.Get("Content-Type")
-	fmt.Println(fileType)
-	if fileType != "image/png" && fileType != "image/jpeg" && fileType != "application/pdf" {
+	buf := make([]byte, 512)
+
+	_, err = file.Read(buf)
+	if err != nil {
+		return
+	}
+
+	contentType := http.DetectContentType(buf)
+
+	fmt.Println("contentType", contentType)
+
+	if contentType != "image/png" && contentType != "image/jpeg" && contentType != "application/pdf" {
 		http.Error(w, "Invalid file type", http.StatusBadRequest)
 		return
 	}
@@ -171,7 +179,7 @@ func handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpObject := Object{Name: fileHeader.Filename, Type: fileType, Data: filePath, FolderID: 1}
+	tmpObject := Object{Name: fileHeader.Filename, Type: contentType, Data: filePath, FolderID: 1}
 
 	result := db.Create(&tmpObject)
 	if result.Error != nil {
@@ -180,7 +188,7 @@ func handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "File uploaded successfully")
+	fmt.Println(w, "File uploaded successfully")
 }
 
 func createFolder(w http.ResponseWriter, r *http.Request) {
@@ -333,8 +341,7 @@ func updateObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if jsonObj.Type != "MD" {
-		fmt.Println("Wrong Objekt Type")
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Wrong Object Type. Only MD-Files can be updated", http.StatusBadRequest)
 		return
 	}
 
@@ -400,8 +407,17 @@ func deleteObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if jsonObj.Type != "MD" {
+		err := os.Remove(jsonObj.Data)
+		if err != nil {
+			fmt.Println("Cant find Objekt?")
+			http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "JSON object deleted")
+	fmt.Println(w, "object deleted")
 }
 
 func getStructure(w http.ResponseWriter, r *http.Request) {
