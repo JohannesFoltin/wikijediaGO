@@ -184,7 +184,7 @@ func handleFileUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func createFolder(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Anfrage lol")
+	fmt.Println("create Folder")
 
 	var folder Folder
 	err := json.NewDecoder(r.Body).Decode(&folder)
@@ -199,13 +199,20 @@ func createFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(folder)
+	w.WriteHeader(http.StatusOK)
 }
 
 func getFolder(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("getFolder")
+
 	var folder Folder
 	id := r.PathValue("id")
+
+	err := json.NewDecoder(r.Body).Decode(&folder)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	result := db.First(&folder, id)
 	if result.Error != nil {
@@ -218,18 +225,20 @@ func getFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateFolder(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("updateFolder")
 	var folder Folder
-	id := r.PathValue("id")
 
-	result := db.First(&folder, id)
-	if result.Error != nil {
-		http.Error(w, "Folder not found", http.StatusNotFound)
-		return
-	}
+	id := r.PathValue("id")
 
 	err := json.NewDecoder(r.Body).Decode(&folder)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	result := db.First(&folder, id)
+	if result.Error != nil {
+		http.Error(w, "Folder not found", http.StatusNotFound)
 		return
 	}
 
@@ -239,11 +248,11 @@ func updateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(folder)
+	w.WriteHeader(http.StatusOK)
 }
 
 func deleteFolder(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Delete Folder")
 	var folder Folder
 	id := r.PathValue("id")
 
@@ -253,32 +262,13 @@ func deleteFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete subfolders recursively
-	deleteSubfolders(folder.ID)
-
 	// Delete JSON objects in the folder
-	db.Where("folder_id = ?", folder.ID).Delete(&Object{})
-
-	// Delete the folder itself
-	result = db.Delete(&folder)
-	if result.Error != nil {
-		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
-		return
-	}
+	db.Delete(&Folder{}, id)
+	db.Where("folder_id = ?", id).Delete(&Object{})
+	db.Where("parent_id = ?", id).Delete(&Folder{})
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, "Folder and its contents deleted")
-}
-
-func deleteSubfolders(parentID uint) {
-	var subfolders []Folder
-	db.Where("parent_id = ?", parentID).Find(&subfolders)
-
-	for _, subfolder := range subfolders {
-		deleteSubfolders(subfolder.ID)
-		db.Where("folder_id = ?", subfolder.ID).Delete(&Object{})
-		db.Delete(&subfolder)
-	}
 }
 
 func createObject(w http.ResponseWriter, r *http.Request) {
@@ -295,8 +285,7 @@ func createObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(jsonObj)
+	w.WriteHeader(http.StatusOK)
 }
 
 func getObject(w http.ResponseWriter, r *http.Request) {
@@ -337,15 +326,21 @@ func updateObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
 	id := r.PathValue("id")
 
-	result := db.First(&jsonObj, id)
-	if result.Error != nil {
-		http.Error(w, "JSON object not found", http.StatusNotFound)
-		return
-	}
-
 	err := json.NewDecoder(r.Body).Decode(&jsonObj)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if jsonObj.Type != "MD" {
+		fmt.Println("Wrong Objekt Type")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	result := db.First(&jsonObj, id)
+	if result.Error != nil {
+		http.Error(w, "JSON object not found", http.StatusNotFound)
 		return
 	}
 
@@ -355,8 +350,7 @@ func updateObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(jsonObj)
+	w.WriteHeader(http.StatusOK)
 }
 
 func updateObjectName(w http.ResponseWriter, r *http.Request) {
@@ -387,8 +381,7 @@ func updateObjectName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(object)
+	w.WriteHeader(http.StatusOK)
 }
 
 func deleteObject(w http.ResponseWriter, r *http.Request) {
