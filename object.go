@@ -96,6 +96,10 @@ func getObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if jsonObj.Type != "MD" {
+		jsonObj.Data = ""
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	err := json.NewEncoder(w).Encode(jsonObj)
 	if err != nil {
