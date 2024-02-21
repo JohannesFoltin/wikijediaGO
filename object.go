@@ -130,8 +130,16 @@ func getFileFromObject(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateObject(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("updateObject")
+
 	var jsonObj Object
 	id := r.PathValue("id")
+
+	result := db.First(&jsonObj, id)
+	if result.Error != nil {
+		http.Error(w, "JSON object not found", http.StatusNotFound)
+		return
+	}
 
 	err := json.NewDecoder(r.Body).Decode(&jsonObj)
 	if err != nil {
@@ -144,14 +152,11 @@ func updateObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := db.First(&jsonObj, id)
-	if result.Error != nil {
-		http.Error(w, "JSON object not found", http.StatusNotFound)
-		return
-	}
+	fmt.Println(jsonObj)
+	fmt.Println(&jsonObj)
 
-	result = db.Save(&jsonObj)
-	if result.Error != nil {
+	result2 := db.Save(&jsonObj)
+	if result2.Error != nil {
 		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}

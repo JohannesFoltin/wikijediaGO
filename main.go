@@ -3,32 +3,34 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"net/http"
 )
 
 var db *gorm.DB
 
 func main() {
 	var err error
+
 	db, err = gorm.Open(sqlite.Open("./Data/gorm.db"), &gorm.Config{})
 	if err != nil {
 		panic("failed to connect to database")
 	}
 
-	tables, err := db.Migrator().GetTables()
+	/* tables, err := db.Migrator().GetTables()
 	if err != nil {
 		panic(err)
 	}
 	for _, table := range tables {
 		fmt.Println(table)
 		db.Migrator().DropTable(table)
-	}
+	} */
 
 	db.AutoMigrate(&Folder{}, &Object{})
 
-	var testJsonObj = Object{Name: "JSONTEST", Type: "MD", Data: "#asd #asd #asd", FolderID: 2}
+	/* var testJsonObj = Object{Name: "JSONTEST", Type: "MD", Data: "#asd #asd #asd", FolderID: 2}
 
 	var zeroFolder = Folder{
 		Name:     "root",
@@ -48,7 +50,7 @@ func main() {
 	db.Create(&testFolder3)
 	db.Create(&testFolder2)
 	db.Create(&testJsonObj2)
-	db.Create(&testJsonObj3)
+	db.Create(&testJsonObj3) */
 
 	// Create a new folder
 	http.Handle("POST /folder", enableCORS(http.HandlerFunc(createFolder)))
@@ -91,6 +93,7 @@ func main() {
 	http.Handle("OPTIONS /upload", http.HandlerFunc(handleCorsRequest))
 
 	// Start the server
+	fmt.Println("Server started")
 	errh := http.ListenAndServe(":8080", nil)
 	if errh != nil {
 		fmt.Println("http Server error")
