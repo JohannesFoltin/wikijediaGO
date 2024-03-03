@@ -10,8 +10,7 @@ import (
 )
 
 type Object struct {
-	ID       uint `gorm:"primaryKey"`
-	Name     string
+	Name     string `gorm:"primaryKey"`
 	Type     string
 	Data     string
 	FolderID uint `gorm:"not null"`
@@ -90,8 +89,9 @@ func getObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
 	id := r.PathValue("id")
 
-	result := db.First(&jsonObj, id)
+	result := db.First(&jsonObj, "name = ?", id)
 	if result.Error != nil {
+		fmt.Println(result.Error.Error())
 		http.Error(w, "JSON object not found", http.StatusNotFound)
 		return
 	}
@@ -112,8 +112,9 @@ func getObject(w http.ResponseWriter, r *http.Request) {
 func getFileFromObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
 	id := r.PathValue("id")
+	fmt.Println(id)
 
-	result := db.First(&jsonObj, id)
+	result := db.First(&jsonObj, "name = ?", id)
 	if result.Error != nil {
 		http.Error(w, "JSON object not found", http.StatusNotFound)
 		return
@@ -135,7 +136,7 @@ func updateObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
 	id := r.PathValue("id")
 
-	result := db.First(&jsonObj, id)
+	result := db.First(&jsonObj, "name = ?", id)
 	if result.Error != nil {
 		http.Error(w, "JSON object not found", http.StatusNotFound)
 		return
@@ -168,7 +169,7 @@ func updateObjectName(w http.ResponseWriter, r *http.Request) {
 	var object Object
 	id := r.PathValue("id")
 
-	result := db.First(&object, id)
+	result := db.First(&object, "name = ?", id)
 	if result.Error != nil {
 		http.Error(w, "Object not found", http.StatusNotFound)
 		return
@@ -183,10 +184,12 @@ func updateObjectName(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Println(updatedData.Name)
-	object.Name = updatedData.Name
 
-	result = db.Save(&object)
+	fmt.Println(updatedData.Name)
+	//object.Name = updatedData.Name
+
+	//result = result.Update("name", updatedData.Name)
+	result = db.Model(&Object{}).Where("name = ?", id).Update("name", updatedData.Name)
 	if result.Error != nil {
 		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
@@ -199,7 +202,7 @@ func deleteObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
 	id := r.PathValue("id")
 
-	result := db.First(&jsonObj, id)
+	result := db.First(&jsonObj, "name = ?", id)
 	if result.Error != nil {
 		http.Error(w, "JSON object not found", http.StatusNotFound)
 		return

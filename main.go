@@ -19,18 +19,18 @@ func main() {
 		panic("failed to connect to database")
 	}
 
-	/* tables, err := db.Migrator().GetTables()
+	tables, err := db.Migrator().GetTables()
 	if err != nil {
 		panic(err)
 	}
 	for _, table := range tables {
 		fmt.Println(table)
 		db.Migrator().DropTable(table)
-	} */
+	}
 
 	db.AutoMigrate(&Folder{}, &Object{})
 
-	/* var testJsonObj = Object{Name: "JSONTEST", Type: "MD", Data: "#asd #asd #asd", FolderID: 2}
+	var testJsonObj = Object{Name: "JSONTEST", Type: "MD", Data: "#asd #asd #asd", FolderID: 2}
 
 	var zeroFolder = Folder{
 		Name:     "root",
@@ -50,7 +50,7 @@ func main() {
 	db.Create(&testFolder3)
 	db.Create(&testFolder2)
 	db.Create(&testJsonObj2)
-	db.Create(&testJsonObj3) */
+	db.Create(&testJsonObj3)
 
 	// Create a new folder
 	http.Handle("POST /folder", enableCORS(http.HandlerFunc(createFolder)))
