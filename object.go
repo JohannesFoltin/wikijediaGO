@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Object struct {
@@ -87,7 +89,7 @@ func createObject(w http.ResponseWriter, r *http.Request) {
 
 func getObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
-	id := r.PathValue("id")
+	id, _ := url.PathUnescape(r.PathValue("id"))
 
 	result := db.First(&jsonObj, "name = ?", id)
 	if result.Error != nil {
@@ -111,7 +113,7 @@ func getObject(w http.ResponseWriter, r *http.Request) {
 
 func getFileFromObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
-	id := r.PathValue("id")
+	id, _ := url.PathUnescape(r.PathValue("id"))
 	fmt.Println(id)
 
 	result := db.First(&jsonObj, "name = ?", id)
@@ -134,7 +136,7 @@ func updateObject(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("updateObject")
 
 	var jsonObj Object
-	id := r.PathValue("id")
+	id, _ := url.PathUnescape(r.PathValue("id"))
 
 	result := db.First(&jsonObj, "name = ?", id)
 	if result.Error != nil {
@@ -153,6 +155,11 @@ func updateObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if id != jsonObj.Name {
+		http.Error(w, "For Renaming Objects use the right endpoint created for exactly that", http.StatusBadRequest)
+		return
+	}
+
 	fmt.Println(jsonObj)
 	fmt.Println(&jsonObj)
 
@@ -167,7 +174,7 @@ func updateObject(w http.ResponseWriter, r *http.Request) {
 
 func updateObjectName(w http.ResponseWriter, r *http.Request) {
 	var object Object
-	id := r.PathValue("id")
+	id, _ := url.PathUnescape(r.PathValue("id"))
 
 	result := db.First(&object, "name = ?", id)
 	if result.Error != nil {
@@ -182,6 +189,11 @@ func updateObjectName(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&updatedData)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if checkName(updatedData.Name) {
+		http.Error(w, "/ are not allowed in Names", http.StatusBadRequest)
 		return
 	}
 
@@ -200,7 +212,7 @@ func updateObjectName(w http.ResponseWriter, r *http.Request) {
 
 func deleteObject(w http.ResponseWriter, r *http.Request) {
 	var jsonObj Object
-	id := r.PathValue("id")
+	id, _ := url.PathUnescape(r.PathValue("id"))
 
 	result := db.First(&jsonObj, "name = ?", id)
 	if result.Error != nil {
@@ -225,4 +237,8 @@ func deleteObject(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Println(w, "object deleted")
+}
+
+func checkName(name string) bool {
+	return strings.Contains(name, "/")
 }
